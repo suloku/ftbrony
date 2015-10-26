@@ -7,6 +7,8 @@
 #include "console.h"
 #include "ftp.h"
 
+u8 * background;
+
 /*! looping mechanism
  *
  *  @param[in] callback function to call during each iteration
@@ -67,6 +69,27 @@ main(int  argc,
   gfxSet3D(false);
 #endif
 
+  //Try to get baground from sd card
+  FILE * pFile;
+  long lSize;
+  size_t result;
+  pFile = fopen ( "background.bin" , "rb" );
+  if (pFile!=NULL){
+	  fseek (pFile , 0 , SEEK_END);
+	  lSize = ftell (pFile);
+	  rewind (pFile);
+	  background = (char*) malloc (sizeof(char)*lSize);
+	  if (background != NULL) {
+		  result = fread (background,1,lSize,pFile);
+		  if (result != lSize) {
+			if (background != NULL){
+				free(background);
+			}
+		  }
+	  }
+  }
+  fclose (pFile);
+
   /* initialize console subsystem */
   console_init();
   console_set_status("\n" GREEN STATUS_STRING RESET);
@@ -88,6 +111,7 @@ main(int  argc,
   /* deinitialize 3DS services */
   gfxExit();
 #endif
+  free (background);
 
   return 0;
 }
