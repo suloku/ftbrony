@@ -12,29 +12,36 @@ u8 * background;
 /*! looping mechanism
  *
  *  @param[in] callback function to call during each iteration
+ *
+ *  @returns loop status
  */
-static void
-loop(int (*callback)(void))
+static loop_status_t
+loop(loop_status_t (*callback)(void))
 {
+  loop_status_t status = LOOP_CONTINUE;
+
 #ifdef _3DS
   while(aptMainLoop())
   {
-    if(callback() == 0)
-      console_render();
-    else
-      return;
+    status = callback();
+    console_render();
+    if(status != LOOP_CONTINUE)
+      return status;
   }
+
+  return LOOP_EXIT;
 #else
-  for(;;)
-    callback();
+  while(status == LOOP_CONTINUE)
+    status = callback();
+  return status;
 #endif
 }
 
 /*! wait until the B button is pressed
  *
- *  @returns -1 if B was pressed
+ *  @returns loop status
  */
-static int
+static loop_status_t
 wait_for_b(void)
 {
 #ifdef _3DS
@@ -43,12 +50,12 @@ wait_for_b(void)
 
   /* check if B was pressed */
   if(hidKeysDown() & KEY_B)
-    return -1;
+    return LOOP_EXIT;
 
   /* B was not pressed */
-  return 0;
+  return LOOP_CONTINUE;
 #else
-  return -1;
+  return LOOP_EXIT;
 #endif
 }
 
@@ -63,13 +70,17 @@ int
 main(int  argc,
      char *argv[])
 {
+  loop_status_t status = LOOP_RESTART;
+
 #ifdef _3DS
   /* initialize needed 3DS services */
+  acInit();
   gfxInitDefault();
   gfxSet3D(false);
+  sdmcWriteSafe(false);
 #endif
 
-  //Try to get baground from sd card
+ //Try to get baground from sd card (won't work as cia, would need absolute path)
   FILE * pFile;
   long lSize;
   size_t result;
@@ -94,24 +105,29 @@ main(int  argc,
   console_init();
   console_set_status("\n" GREEN STATUS_STRING RESET);
 
-  /* initialize ftp subsystem */
-  if(ftp_init() == 0)
+  while(status == LOOP_RESTART)
   {
-    /* ftp loop */
-    loop(ftp_loop);
+    /* initialize ftp subsystem */
+    if(ftp_init() == 0)
+    {
+      /* ftp loop */
+      status = loop(ftp_loop);
 
-    /* done with ftp */
-    ftp_exit();
+      /* done with ftp */
+      ftp_exit();
+    }
+    else
+      status = LOOP_EXIT;
   }
 
   console_print("Press B to exit\n");
   loop(wait_for_b);
-
+  if (background != NULL) free (background);
 #ifdef _3DS
   /* deinitialize 3DS services */
   gfxExit();
+  acExit();
 #endif
-  free (background);
 
   return 0;
 }
